@@ -1,5 +1,7 @@
 provider "aws" {
   region = var.aws_region
+  access_key = "AKIASJEWUOJOJ5J6ZBMM"
+  secret_key = "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"
 }
 
 module "storage" {
