@@ -55,11 +55,19 @@ resource "aws_iam_policy" "user_mgmt_policy" {
           "dynamodb:PutItem",
           "dynamodb:GetItem",
           "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
           "dynamodb:Query",
           "dynamodb:Scan"
         ]
         Effect   = "Allow"
-        Resource = [var.dynamodb_table_arn, "${var.dynamodb_table_arn}/index/*"]
+        Resource = [
+          var.dynamodb_table_arn, 
+          "${var.dynamodb_table_arn}/index/*",
+          var.courses_table_arn,
+          "${var.courses_table_arn}/index/*",
+          var.evaluations_table_arn,
+          "${var.evaluations_table_arn}/index/*"
+        ]
       }
     ]
   })
@@ -82,10 +90,18 @@ resource "aws_iam_policy" "course_create_policy" {
           "dynamodb:PutItem",
           "dynamodb:GetItem",
           "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
           "dynamodb:Query"
         ]
         Effect   = "Allow"
-        Resource = [var.dynamodb_table_arn, "${var.dynamodb_table_arn}/index/*"]
+        Resource = [
+          var.dynamodb_table_arn, 
+          "${var.dynamodb_table_arn}/index/*",
+          var.courses_table_arn,
+          "${var.courses_table_arn}/index/*",
+          var.evaluations_table_arn,
+          "${var.evaluations_table_arn}/index/*"
+        ]
       },
       {
         Action = [
@@ -118,7 +134,14 @@ resource "aws_iam_policy" "course_query_policy" {
           "dynamodb:Scan"
         ]
         Effect   = "Allow"
-        Resource = [var.dynamodb_table_arn, "${var.dynamodb_table_arn}/index/*"]
+        Resource = [
+          var.dynamodb_table_arn, 
+          "${var.dynamodb_table_arn}/index/*",
+          var.courses_table_arn,
+          "${var.courses_table_arn}/index/*",
+          var.evaluations_table_arn,
+          "${var.evaluations_table_arn}/index/*"
+        ]
       },
       {
         Action = [
@@ -136,6 +159,25 @@ resource "aws_iam_role_policy_attachment" "course_query_attach" {
   policy_arn = aws_iam_policy.course_query_policy.arn
 }
 
+# --- Zip Code ---
+data "archive_file" "user_management_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../../functions/user-management/index.mjs"
+  output_path = "${path.module}/user_management.zip"
+}
+
+data "archive_file" "course_creation_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../../functions/course-creation/index.mjs"
+  output_path = "${path.module}/course_creation.zip"
+}
+
+data "archive_file" "course_query_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../../functions/course-query/index.mjs"
+  output_path = "${path.module}/course_query.zip"
+}
+
 # --- Lambdas ---
 
 # User Management Lambda
@@ -144,12 +186,15 @@ resource "aws_lambda_function" "user_management" {
   role          = aws_iam_role.user_management_role.arn
   handler       = "index.handler"
   runtime       = "nodejs18.x"
-  filename      = "${path.module}/dummy.zip" # Placeholder
+  filename      = data.archive_file.user_management_zip.output_path
+  source_code_hash = data.archive_file.user_management_zip.output_base64sha256
 
   environment {
     variables = {
-      DYNAMODB_TABLE = var.dynamodb_table_name
-      USER_POOL_ID   = var.user_pool_id
+      DYNAMODB_TABLE          = var.dynamodb_table_name
+      COURSES_TABLE           = var.courses_table_name
+      EVALUATIONS_TABLE       = var.evaluations_table_name
+      USER_POOL_ID            = var.user_pool_id
     }
   }
 }
@@ -160,12 +205,15 @@ resource "aws_lambda_function" "course_creation" {
   role          = aws_iam_role.course_creation_role.arn
   handler       = "index.handler"
   runtime       = "nodejs18.x"
-  filename      = "${path.module}/dummy.zip" # Placeholder
+  filename      = data.archive_file.course_creation_zip.output_path
+  source_code_hash = data.archive_file.course_creation_zip.output_base64sha256
 
   environment {
     variables = {
-      DYNAMODB_TABLE = var.dynamodb_table_name
-      S3_BUCKET      = var.video_bucket_name
+      DYNAMODB_TABLE    = var.dynamodb_table_name
+      COURSES_TABLE     = var.courses_table_name
+      EVALUATIONS_TABLE = var.evaluations_table_name
+      S3_BUCKET         = var.video_bucket_name
     }
   }
 }
@@ -176,12 +224,15 @@ resource "aws_lambda_function" "course_query" {
   role          = aws_iam_role.course_query_role.arn
   handler       = "index.handler"
   runtime       = "nodejs18.x"
-  filename      = "${path.module}/dummy.zip" # Placeholder
+  filename      = data.archive_file.course_query_zip.output_path
+  source_code_hash = data.archive_file.course_query_zip.output_base64sha256
 
   environment {
     variables = {
-      DYNAMODB_TABLE = var.dynamodb_table_name
-      S3_BUCKET      = var.video_bucket_name
+      DYNAMODB_TABLE    = var.dynamodb_table_name
+      COURSES_TABLE     = var.courses_table_name
+      EVALUATIONS_TABLE = var.evaluations_table_name
+      S3_BUCKET         = var.video_bucket_name
     }
   }
 }
@@ -247,6 +298,10 @@ variable "project_name" {}
 variable "environment" {}
 variable "dynamodb_table_name" {}
 variable "dynamodb_table_arn" {}
+variable "courses_table_name" {}
+variable "courses_table_arn" {}
+variable "evaluations_table_name" {}
+variable "evaluations_table_arn" {}
 variable "video_bucket_name" {}
 variable "video_bucket_arn" {}
 variable "user_pool_id" {}

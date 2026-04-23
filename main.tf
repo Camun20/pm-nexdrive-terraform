@@ -1,13 +1,12 @@
 provider "aws" {
   region = var.aws_region
-  access_key = "AKIASJEWUOJOJ5J6ZBMM"
-  secret_key = "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"
 }
 
 module "storage" {
-  source       = "./modules/storage"
-  project_name = var.project_name
-  environment  = var.environment
+  source         = "./modules/storage"
+  project_name   = var.project_name
+  environment    = var.environment
+  amplify_domain = var.amplify_domain
 }
 
 module "cognito" {
@@ -17,14 +16,18 @@ module "cognito" {
 }
 
 module "lambda" {
-  source              = "./modules/lambda"
-  project_name        = var.project_name
-  environment         = var.environment
-  dynamodb_table_name = module.storage.dynamodb_table_name
-  dynamodb_table_arn  = module.storage.dynamodb_table_arn
-  video_bucket_name   = module.storage.video_bucket_name
-  video_bucket_arn    = module.storage.video_bucket_arn
-  user_pool_id        = module.cognito.user_pool_id
+  source                 = "./modules/lambda"
+  project_name           = var.project_name
+  environment            = var.environment
+  dynamodb_table_name    = module.storage.dynamodb_table_name
+  dynamodb_table_arn     = module.storage.dynamodb_table_arn
+  courses_table_name     = module.storage.courses_table_name
+  courses_table_arn      = module.storage.courses_table_arn
+  evaluations_table_name = module.storage.evaluations_table_name
+  evaluations_table_arn  = module.storage.evaluations_table_arn
+  video_bucket_name      = module.storage.video_bucket_name
+  video_bucket_arn       = module.storage.video_bucket_arn
+  user_pool_id           = module.cognito.user_pool_id
 }
 
 module "api_gateway" {

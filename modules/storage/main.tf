@@ -2,6 +2,18 @@ resource "aws_s3_bucket" "video_content" {
   bucket = "${var.project_name}-videos-${var.environment}-pm-nexdrive-unique"
 }
 
+resource "aws_s3_bucket_cors_configuration" "video_content" {
+  bucket = aws_s3_bucket.video_content.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = [var.amplify_domain]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "video_content_sse" {
   bucket = aws_s3_bucket.video_content.id
 
@@ -60,6 +72,44 @@ resource "aws_dynamodb_table" "metadata" {
   }
 }
 
+resource "aws_dynamodb_table" "courses" {
+  name         = "NexDrive-Courses-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "courseId"
+
+  attribute {
+    name = "courseId"
+    type = "S"
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+resource "aws_dynamodb_table" "evaluations" {
+  name         = "NexDrive-Evaluations-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "courseId"
+  range_key    = "questionId"
+
+  attribute {
+    name = "courseId"
+    type = "S"
+  }
+
+  attribute {
+    name = "questionId"
+    type = "S"
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
 output "video_bucket_id" {
   value = aws_s3_bucket.video_content.id
 }
@@ -84,5 +134,22 @@ output "dynamodb_table_arn" {
   value = aws_dynamodb_table.metadata.arn
 }
 
+output "courses_table_name" {
+  value = aws_dynamodb_table.courses.name
+}
+
+output "courses_table_arn" {
+  value = aws_dynamodb_table.courses.arn
+}
+
+output "evaluations_table_name" {
+  value = aws_dynamodb_table.evaluations.name
+}
+
+output "evaluations_table_arn" {
+  value = aws_dynamodb_table.evaluations.arn
+}
+
 variable "project_name" {}
 variable "environment" {}
+variable "amplify_domain" {}

@@ -15,3 +15,9 @@ variable "environment" {
   type        = string
   default     = "dev"
 }
+
+variable "amplify_domain" {
+  description = "The domain of the Amplify application for CORS."
+  type        = string
+  default     = "https://main.d3dhvqli97edsu.amplifyapp.com"
+}
