@@ -1,6 +1,6 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { DynamoDBDocumentClient, PutCommand, DeleteCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const client = new DynamoDBClient({});
@@ -16,33 +16,32 @@ export const handler = async (event) => {
 
   try {
     const data = JSON.parse(body);
-    const { action, course, evaluations } = data;
+    const { action, courseId, course, evaluations } = data;
 
+    // 1. CREATE OR UPDATE COURSE
     if (action === "createCourse") {
-      const courseId = `crs_${Date.now()}`;
+      const id = courseId || `crs_${Date.now()}`;
       
-      // 1. Save Course Metadata
       await docClient.send(new PutCommand({
         TableName: COURSES_TABLE,
         Item: {
-          courseId,
+          courseId: id,
           title: course.title,
           description: course.description,
-          modules: course.modules, // Array of modules
-          createdAt: new Date().toISOString()
+          modules: course.modules,
+          updatedAt: new Date().toISOString()
         }
       }));
 
-      // 2. Save Evaluations if any
       if (evaluations && evaluations.length > 0) {
         for (const evalItem of evaluations) {
           await docClient.send(new PutCommand({
             TableName: EVALUATIONS_TABLE,
             Item: {
-              courseId: courseId,
-              questionId: "FINAL_EXAM", // We store the whole exam as one record for now
+              courseId: id,
+              questionId: "FINAL_EXAM",
               title: evalItem.title,
-              questions: evalItem.questions, // Array of multiple choice questions
+              questions: evalItem.questions,
               passingScore: 80,
               updatedAt: new Date().toISOString()
             }
@@ -50,10 +49,8 @@ export const handler = async (event) => {
         }
       }
 
-      // 3. Generate Pre-signed URLs for each module video if needed
-      // Or just return one for the main upload if the frontend asks for it
       const presignedUrls = await Promise.all(course.modules.map(async (mod, idx) => {
-        const key = `videos/${courseId}/module_${idx}_${Date.now()}.mp4`;
+        const key = `videos/${id}/module_${idx}_${Date.now()}.mp4`;
         const command = new PutObjectCommand({
           Bucket: S3_BUCKET,
           Key: key,
@@ -66,11 +63,40 @@ export const handler = async (event) => {
       return {
         statusCode: 201,
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({
-          message: "Course created successfully",
-          courseId,
-          presignedUrls
-        })
+        body: JSON.stringify({ message: "Course saved successfully", courseId: id, presignedUrls })
+      };
+    }
+
+    // 2. DELETE COURSE
+    if (action === "deleteCourse") {
+      if (!courseId) return { statusCode: 400, body: JSON.stringify({ message: "Missing courseId" }) };
+
+      // Delete from Courses Table
+      await docClient.send(new DeleteCommand({ TableName: COURSES_TABLE, Key: { courseId } }));
+
+      // Delete from Evaluations Table
+      const evals = await docClient.send(new ScanCommand({
+        TableName: EVALUATIONS_TABLE,
+        FilterExpression: "courseId = :cid",
+        ExpressionAttributeValues: { ":cid": courseId }
+      }));
+      for (const item of (evals.Items || [])) {
+        await docClient.send(new DeleteCommand({ TableName: EVALUATIONS_TABLE, Key: { courseId: item.courseId, questionId: item.questionId } }));
+      }
+
+      // Delete videos from S3
+      const listCommand = new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: `videos/${courseId}/` });
+      const listedObjects = await s3Client.send(listCommand);
+      if (listedObjects.Contents && listedObjects.Contents.length > 0) {
+        for (const obj of listedObjects.Contents) {
+          await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: obj.Key }));
+        }
+      }
+
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ message: "Course and associated data deleted" })
       };
     }
 

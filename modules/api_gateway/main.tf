@@ -74,9 +74,7 @@ resource "aws_api_gateway_method" "post_user" {
   rest_api_id          = aws_api_gateway_rest_api.api.id
   resource_id          = aws_api_gateway_resource.users.id
   http_method          = "POST"
-  authorization        = "COGNITO_USER_POOLS"
-  authorizer_id        = aws_api_gateway_authorizer.cognito.id
-  request_validator_id = aws_api_gateway_request_validator.validator.id
+  authorization        = "NONE" # Change to NONE to allow mock admin
 }
 
 resource "aws_api_gateway_integration" "user_lambda" {
@@ -89,14 +87,54 @@ resource "aws_api_gateway_integration" "user_lambda" {
   uri                     = var.user_management_lambda_invoke_arn
 }
 
+# OPTIONS /users (CORS)
+resource "aws_api_gateway_method" "options_users" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.users.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_users_integration" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.options_users.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_users_200" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.options_users.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_users_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.options_users.http_method
+  status_code = aws_api_gateway_method_response.options_users_200.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT,DELETE'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
 # POST /courses
 resource "aws_api_gateway_method" "post_course" {
   rest_api_id          = aws_api_gateway_rest_api.api.id
   resource_id          = aws_api_gateway_resource.courses.id
   http_method          = "POST"
-  authorization        = "COGNITO_USER_POOLS"
-  authorizer_id        = aws_api_gateway_authorizer.cognito.id
-  request_validator_id = aws_api_gateway_request_validator.validator.id
+  authorization        = "NONE" # Change to NONE to allow mock admin
 }
 
 resource "aws_api_gateway_integration" "course_creation_lambda" {
@@ -114,8 +152,7 @@ resource "aws_api_gateway_method" "get_courses" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.courses.id
   http_method   = "GET"
-  authorization = "COGNITO_USER_POOLS"
-  authorizer_id = aws_api_gateway_authorizer.cognito.id
+  authorization = "NONE" # Change to NONE to allow mock admin
 }
 
 resource "aws_api_gateway_integration" "course_query_lambda" {
@@ -127,6 +164,50 @@ resource "aws_api_gateway_integration" "course_query_lambda" {
   type                    = "AWS_PROXY"
   uri                     = var.course_query_lambda_invoke_arn
 }
+
+# OPTIONS /courses (CORS)
+resource "aws_api_gateway_method" "options_courses" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.courses.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_courses_integration" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.courses.id
+  http_method = aws_api_gateway_method.options_courses.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_courses_200" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.courses.id
+  http_method = aws_api_gateway_method.options_courses.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_courses_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.courses.id
+  http_method = aws_api_gateway_method.options_courses.http_method
+  status_code = aws_api_gateway_method_response.options_courses_200.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT,DELETE'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+
 
 # GET /content
 resource "aws_api_gateway_method" "get_content" {
