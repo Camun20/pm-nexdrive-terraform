@@ -125,7 +125,7 @@ resource "aws_api_gateway_integration_response" "options_users_integration_respo
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT,DELETE'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://main.d3dhvqli97edsu.amplifyapp.com'"
   }
 }
 
@@ -203,7 +203,7 @@ resource "aws_api_gateway_integration_response" "options_courses_integration_res
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT,DELETE'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://main.d3dhvqli97edsu.amplifyapp.com'"
   }
 }
 
@@ -226,6 +226,48 @@ resource "aws_api_gateway_integration" "content_lambda" {
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = var.course_query_lambda_invoke_arn
+}
+
+# OPTIONS /content (CORS)
+resource "aws_api_gateway_method" "options_content" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.content.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_content_integration" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.content.id
+  http_method = aws_api_gateway_method.options_content.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "options_content_200" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.content.id
+  http_method = aws_api_gateway_method.options_content.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_content_integration_response" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.content.id
+  http_method = aws_api_gateway_method.options_content.http_method
+  status_code = aws_api_gateway_method_response.options_content_200.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT,DELETE'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'https://main.d3dhvqli97edsu.amplifyapp.com'"
+  }
 }
 
 
@@ -255,10 +297,42 @@ resource "aws_api_gateway_deployment" "api_deployment" {
     aws_api_gateway_integration.user_lambda,
     aws_api_gateway_integration.course_creation_lambda,
     aws_api_gateway_integration.course_query_lambda,
-    aws_api_gateway_integration.content_lambda
+    aws_api_gateway_integration.content_lambda,
+    aws_api_gateway_integration.options_users_integration,
+    aws_api_gateway_integration.options_courses_integration,
+    aws_api_gateway_integration.options_content_integration
   ]
 
   rest_api_id = aws_api_gateway_rest_api.api.id
+
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.users.id,
+      aws_api_gateway_method.post_user.id,
+      aws_api_gateway_integration.user_lambda.id,
+      aws_api_gateway_method.options_users.id,
+      aws_api_gateway_integration.options_users_integration.id,
+      aws_api_gateway_method_response.options_users_200.id,
+      aws_api_gateway_integration_response.options_users_integration_response.id,
+      aws_api_gateway_resource.courses.id,
+      aws_api_gateway_method.post_course.id,
+      aws_api_gateway_integration.course_creation_lambda.id,
+      aws_api_gateway_method.get_courses.id,
+      aws_api_gateway_integration.course_query_lambda.id,
+      aws_api_gateway_method.options_courses.id,
+      aws_api_gateway_integration.options_courses_integration.id,
+      aws_api_gateway_method_response.options_courses_200.id,
+      aws_api_gateway_integration_response.options_courses_integration_response.id,
+      aws_api_gateway_resource.content.id,
+      aws_api_gateway_method.get_content.id,
+      aws_api_gateway_integration.content_lambda.id,
+      aws_api_gateway_method.options_content.id,
+      aws_api_gateway_integration.options_content_integration.id,
+      aws_api_gateway_method_response.options_content_200.id,
+      aws_api_gateway_integration_response.options_content_integration_response.id
+    ]))
+  }
+
   lifecycle {
     create_before_destroy = true
   }

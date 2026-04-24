@@ -26,6 +26,11 @@ resource "aws_iam_role" "course_query_role" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
+resource "aws_iam_role" "post_confirmation_role" {
+  name               = "${var.project_name}-post-conf-role-${var.environment}"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
 # --- Basic Execution (Logs) ---
 resource "aws_iam_role_policy_attachment" "user_mgmt_logs" {
   role       = aws_iam_role.user_management_role.name
@@ -42,122 +47,66 @@ resource "aws_iam_role_policy_attachment" "course_query_logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# --- Specific Policies ---
-# User Management: DB Read/Write
-resource "aws_iam_policy" "user_mgmt_policy" {
-  name        = "${var.project_name}-user-mgmt-policy-${var.environment}"
-  description = "DynamoDB read/write access for User Management"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:Query",
-          "dynamodb:Scan"
-        ]
-        Effect   = "Allow"
-        Resource = [
-          var.dynamodb_table_arn, 
-          "${var.dynamodb_table_arn}/index/*",
-          var.courses_table_arn,
-          "${var.courses_table_arn}/index/*",
-          var.evaluations_table_arn,
-          "${var.evaluations_table_arn}/index/*"
-        ]
-      }
-    ]
-  })
+resource "aws_iam_role_policy_attachment" "post_conf_logs" {
+  role       = aws_iam_role.post_confirmation_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy_attachment" "user_mgmt_attach" {
+# --- Full Access Policies (Requested) ---
+resource "aws_iam_role_policy_attachment" "user_mgmt_dynamo" {
   role       = aws_iam_role.user_management_role.name
-  policy_arn = aws_iam_policy.user_mgmt_policy.arn
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
 }
 
-# Course Creation: DB Read/Write + S3 Put (for Presigned URLs generation or uploads)
-resource "aws_iam_policy" "course_create_policy" {
-  name        = "${var.project_name}-course-create-policy-${var.environment}"
-  description = "DynamoDB read/write and S3 put access for Course Creation"
+resource "aws_iam_role_policy_attachment" "user_mgmt_s3" {
+  role       = aws_iam_role.user_management_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+resource "aws_iam_role_policy" "user_mgmt_cognito" {
+  name = "cognito_admin_delete"
+  role = aws_iam_role.user_management_role.id
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Action = [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:Query"
+          "cognito-idp:AdminDeleteUser"
         ]
         Effect   = "Allow"
-        Resource = [
-          var.dynamodb_table_arn, 
-          "${var.dynamodb_table_arn}/index/*",
-          var.courses_table_arn,
-          "${var.courses_table_arn}/index/*",
-          var.evaluations_table_arn,
-          "${var.evaluations_table_arn}/index/*"
-        ]
+        Resource = var.user_pool_arn
       },
-      {
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject"
-        ]
-        Effect   = "Allow"
-        Resource = "${var.video_bucket_arn}/*"
-      }
     ]
   })
 }
 
-resource "aws_iam_role_policy_attachment" "course_create_attach" {
+resource "aws_iam_role_policy_attachment" "course_create_dynamo" {
   role       = aws_iam_role.course_creation_role.name
-  policy_arn = aws_iam_policy.course_create_policy.arn
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
 }
 
-# Course Query: DB Read Only + S3 GetObject (if presigned get urls are needed)
-resource "aws_iam_policy" "course_query_policy" {
-  name        = "${var.project_name}-course-query-policy-${var.environment}"
-  description = "DynamoDB read and S3 read for Course Query"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:Query",
-          "dynamodb:Scan"
-        ]
-        Effect   = "Allow"
-        Resource = [
-          var.dynamodb_table_arn, 
-          "${var.dynamodb_table_arn}/index/*",
-          var.courses_table_arn,
-          "${var.courses_table_arn}/index/*",
-          var.evaluations_table_arn,
-          "${var.evaluations_table_arn}/index/*"
-        ]
-      },
-      {
-        Action = [
-          "s3:GetObject"
-        ]
-        Effect   = "Allow"
-        Resource = "${var.video_bucket_arn}/*"
-      }
-    ]
-  })
+resource "aws_iam_role_policy_attachment" "course_create_s3" {
+  role       = aws_iam_role.course_creation_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 }
 
-resource "aws_iam_role_policy_attachment" "course_query_attach" {
+resource "aws_iam_role_policy_attachment" "course_query_dynamo" {
   role       = aws_iam_role.course_query_role.name
-  policy_arn = aws_iam_policy.course_query_policy.arn
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
 }
+
+resource "aws_iam_role_policy_attachment" "course_query_s3" {
+  role       = aws_iam_role.course_query_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "post_conf_dynamo" {
+  role       = aws_iam_role.post_confirmation_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+}
+
+# (Old specific policies removed as they are superseded by FullAccess managed policies)
 
 # --- Zip Code ---
 data "archive_file" "user_management_zip" {
@@ -178,6 +127,12 @@ data "archive_file" "course_query_zip" {
   output_path = "${path.module}/course_query.zip"
 }
 
+data "archive_file" "post_confirmation_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../../functions/post-confirmation/index.mjs"
+  output_path = "${path.module}/post_confirmation.zip"
+}
+
 # --- Lambdas ---
 
 # User Management Lambda
@@ -191,10 +146,11 @@ resource "aws_lambda_function" "user_management" {
 
   environment {
     variables = {
-      DYNAMODB_TABLE          = var.dynamodb_table_name
-      COURSES_TABLE           = var.courses_table_name
-      EVALUATIONS_TABLE       = var.evaluations_table_name
-      USER_POOL_ID            = var.user_pool_id
+      DYNAMODB_TABLE    = var.dynamodb_table_name
+      COURSES_TABLE     = var.courses_table_name
+      EVALUATIONS_TABLE = var.evaluations_table_name
+      USERS_DATA_TABLE  = var.users_data_table_name
+      USER_POOL_ID      = var.user_pool_id
     }
   }
 }
@@ -235,6 +191,29 @@ resource "aws_lambda_function" "course_query" {
       S3_BUCKET         = var.video_bucket_name
     }
   }
+}
+
+resource "aws_lambda_function" "post_confirmation" {
+  function_name = "${var.project_name}-post-confirmation-${var.environment}"
+  role          = aws_iam_role.post_confirmation_role.arn
+  handler       = "index.handler"
+  runtime       = "nodejs18.x"
+  filename      = data.archive_file.post_confirmation_zip.output_path
+  source_code_hash = data.archive_file.post_confirmation_zip.output_base64sha256
+
+  environment {
+    variables = {
+      USERS_DATA_TABLE = var.users_data_table_name
+    }
+  }
+}
+
+resource "aws_lambda_permission" "allow_cognito" {
+  statement_id  = "AllowExecutionFromCognito"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.post_confirmation.function_name
+  principal     = "cognito-idp.amazonaws.com"
+  source_arn    = var.user_pool_arn
 }
 
 # --- CloudWatch Log Groups ---
@@ -292,6 +271,10 @@ output "course_query_invoke_arn" {
   value = aws_lambda_function.course_query.invoke_arn
 }
 
+output "post_confirmation_arn" {
+  value = aws_lambda_function.post_confirmation.arn
+}
+
 # --- Variables ---
 
 variable "project_name" {}
@@ -305,3 +288,6 @@ variable "evaluations_table_arn" {}
 variable "video_bucket_name" {}
 variable "video_bucket_arn" {}
 variable "user_pool_id" {}
+variable "user_pool_arn" {}
+variable "users_data_table_name" {}
+variable "users_data_table_arn" {}

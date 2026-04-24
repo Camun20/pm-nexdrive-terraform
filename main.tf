@@ -10,9 +10,10 @@ module "storage" {
 }
 
 module "cognito" {
-  source       = "./modules/cognito"
-  project_name = var.project_name
-  environment  = var.environment
+  source                       = "./modules/cognito"
+  project_name                 = var.project_name
+  environment                  = var.environment
+  post_confirmation_lambda_arn = module.lambda.post_confirmation_arn
 }
 
 module "lambda" {
@@ -25,9 +26,12 @@ module "lambda" {
   courses_table_arn      = module.storage.courses_table_arn
   evaluations_table_name = module.storage.evaluations_table_name
   evaluations_table_arn  = module.storage.evaluations_table_arn
+  users_data_table_name  = module.storage.users_data_table_name
+  users_data_table_arn   = module.storage.users_data_table_arn
   video_bucket_name      = module.storage.video_bucket_name
   video_bucket_arn       = module.storage.video_bucket_arn
   user_pool_id           = module.cognito.user_pool_id
+  user_pool_arn          = module.cognito.user_pool_arn
 }
 
 module "api_gateway" {

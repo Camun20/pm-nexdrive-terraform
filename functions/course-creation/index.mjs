@@ -7,8 +7,20 @@ const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 const s3Client = new S3Client({});
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "https://main.d3dhvqli97edsu.amplifyapp.com",
+  "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+  "Access-Control-Allow-Methods": "GET,OPTIONS,POST,PUT,DELETE",
+  "Access-Control-Allow-Credentials": "true"
+};
+
 export const handler = async (event) => {
   console.log("Event:", JSON.stringify(event));
+  
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers: CORS_HEADERS, body: "" };
+  }
+
   const { body } = event;
   const COURSES_TABLE = process.env.COURSES_TABLE;
   const EVALUATIONS_TABLE = process.env.EVALUATIONS_TABLE;
@@ -62,19 +74,17 @@ export const handler = async (event) => {
 
       return {
         statusCode: 201,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: CORS_HEADERS,
         body: JSON.stringify({ message: "Course saved successfully", courseId: id, presignedUrls })
       };
     }
 
     // 2. DELETE COURSE
     if (action === "deleteCourse") {
-      if (!courseId) return { statusCode: 400, body: JSON.stringify({ message: "Missing courseId" }) };
+      if (!courseId) return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ message: "Missing courseId" }) };
 
-      // Delete from Courses Table
       await docClient.send(new DeleteCommand({ TableName: COURSES_TABLE, Key: { courseId } }));
 
-      // Delete from Evaluations Table
       const evals = await docClient.send(new ScanCommand({
         TableName: EVALUATIONS_TABLE,
         FilterExpression: "courseId = :cid",
@@ -84,7 +94,6 @@ export const handler = async (event) => {
         await docClient.send(new DeleteCommand({ TableName: EVALUATIONS_TABLE, Key: { courseId: item.courseId, questionId: item.questionId } }));
       }
 
-      // Delete videos from S3
       const listCommand = new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: `videos/${courseId}/` });
       const listedObjects = await s3Client.send(listCommand);
       if (listedObjects.Contents && listedObjects.Contents.length > 0) {
@@ -95,19 +104,45 @@ export const handler = async (event) => {
 
       return {
         statusCode: 200,
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: CORS_HEADERS,
         body: JSON.stringify({ message: "Course and associated data deleted" })
+      };
+    }
+
+    // 3. SAVE EVALUATION
+    if (action === "saveEvaluation") {
+      const { courseId, title, questions } = data;
+      if (!courseId) return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ message: "Missing courseId" }) };
+
+      await docClient.send(new PutCommand({
+        TableName: EVALUATIONS_TABLE,
+        Item: {
+          courseId,
+          questionId: "FINAL_EXAM",
+          title: title || "Examen Final",
+          questions: questions || [],
+          passingScore: 80,
+          updatedAt: new Date().toISOString()
+        }
+      }));
+
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ message: "Evaluation saved successfully" })
       };
     }
 
     return {
       statusCode: 400,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ message: "Invalid action" })
     };
   } catch (error) {
     console.error(error);
     return {
       statusCode: 500,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ message: "Internal Server Error", error: error.message })
     };
   }

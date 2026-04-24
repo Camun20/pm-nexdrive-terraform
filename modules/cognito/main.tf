@@ -23,6 +23,10 @@ resource "aws_cognito_user_pool" "pool" {
   }
 
   auto_verified_attributes = ["email"]
+  
+  lambda_config {
+    post_confirmation = var.post_confirmation_lambda_arn
+  }
 }
 
 resource "aws_cognito_user_pool_client" "client" {
@@ -52,3 +56,4 @@ output "client_id" {
 
 variable "project_name" {}
 variable "environment" {}
+variable "post_confirmation_lambda_arn" {}

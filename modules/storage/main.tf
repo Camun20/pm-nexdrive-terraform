@@ -110,6 +110,22 @@ resource "aws_dynamodb_table" "evaluations" {
   }
 }
 
+resource "aws_dynamodb_table" "users_data" {
+  name         = "NexDrive-Users-Data-${var.environment}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "email"
+
+  attribute {
+    name = "email"
+    type = "S"
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
 output "video_bucket_id" {
   value = aws_s3_bucket.video_content.id
 }
@@ -148,6 +164,14 @@ output "evaluations_table_name" {
 
 output "evaluations_table_arn" {
   value = aws_dynamodb_table.evaluations.arn
+}
+
+output "users_data_table_name" {
+  value = aws_dynamodb_table.users_data.name
+}
+
+output "users_data_table_arn" {
+  value = aws_dynamodb_table.users_data.arn
 }
 
 variable "project_name" {}
